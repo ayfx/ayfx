@@ -1,0 +1,100 @@
+import ccxt
+import pandas as pd
+import time
+from dotenv import load_dotenv
+import os
+
+# Load the API key from the .env file
+load_dotenv()
+DERIV_API_KEY=TY7rB8C1KdtUQTI
+
+# Initialize the broker connection with the securely loaded API key
+exchange = ccxt.deriv({
+    'apiKey': api_key,
+    'secret': '',  # Deriv typically doesn’t require a secret key
+})
+
+# Constants
+PAIR = 'V25'   # Volatility 25 Index
+TIMEFRAME = '1m'
+STOP_LOSS_AMOUNT = 3  # Fixed stop loss of $3
+
+# Step 2: Define SMC functions (Order Block, Market Structure, etc.)
+
+def identify_order_blocks(data):
+    # Placeholder function to identify demand/supply order blocks
+    # In a real implementation, you would look for price consolidation
+    # areas followed by strong breakouts
+    return {"type": "demand", "price": data['low'].min()}  # Example output
+
+def detect_market_structure(data):
+    # Placeholder function to detect market structure (HH, HL, LH, LL)
+    # Typically involves checking the high and low points over time
+    return "bullish"  # Example output
+
+def find_liquidity_zones(data):
+    # Placeholder function to find liquidity zones
+    # Example of identifying areas where price is likely to retrace
+    return {"upper": data['high'].max(), "lower": data['low'].min()}
+
+# Step 3: Fetch and process market data
+def fetch_data():
+    try:
+        data = exchange.fetch_ohlcv(PAIR, timeframe=TIMEFRAME, limit=500)
+        df = pd.DataFrame(data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        return df
+    except Exception as e:
+        print("Error fetching data:", e)
+        return None
+
+# Step 4: Implement trading logic
+def trading_logic(data):
+    structure = detect_market_structure(data)
+    order_block = identify_order_blocks(data)
+    liquidity_zone = find_liquidity_zones(data)
+    
+    # Example condition for a buy setup based on SMC criteria
+    if structure == "bullish" and order_block["type"] == "demand" and data['close'].iloc[-1] > order_block["price"]:
+        return "buy"
+    elif structure == "bearish" and order_block["type"] == "supply" and data['close'].iloc[-1] < order_block["price"]:
+        return "sell"
+    else:
+        return None
+
+# Step 5: Execute trades with a $3 stop-loss
+def execute_trade(signal):
+    if signal == "buy":
+        print("Placing a buy order")
+        position_size = calculate_position_size()
+        order = exchange.create_market_buy_order(PAIR, position_size)
+        place_stop_loss(order, "buy")
+        
+    elif signal == "sell":
+        print("Placing a sell order")
+        position_size = calculate_position_size()
+        order = exchange.create_market_sell_order(PAIR, position_size)
+        place_stop_loss(order, "sell")
+
+def calculate_position_size():
+    # Simplified placeholder for calculating position size
+    return 1  # Adjust this based on your risk tolerance and balance
+
+def place_stop_loss(order, direction):
+    entry_price = order['price']
+    if direction == "buy":
+        stop_loss_price = entry_price - (STOP_LOSS_AMOUNT / order['amount'])
+    else:
+        stop_loss_price = entry_price + (STOP_LOSS_AMOUNT / order['amount'])
+    
+    print(f"Setting stop loss at: {stop_loss_price}")
+    # Code to place stop-loss order here
+
+# Main trading loop
+while True:
+    data = fetch_data()
+    if data is not None:
+        signal = trading_logic(data)
+        if signal:
+            execute_trade(signal)
+    time.sleep(60)  # Wait for 1 minute before fetching new data
